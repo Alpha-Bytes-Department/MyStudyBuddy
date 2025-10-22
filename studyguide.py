@@ -74,7 +74,7 @@ def generate_study_guide(text, extra_instructions=""):
     return study_guide_text, diagram_url
 
 # --- Main UI ---
-st.title("📘 AI Study Guide Generator")
+st.title(" AI Study Guide Generator")
 
 if extracted_text:
     if st.button("Generate Study Guide"):
@@ -88,4 +88,5 @@ for idx, item in enumerate(st.session_state.history[::-1], 1):
     st.markdown(item["guide"])
     st.image(item["diagram"], caption="AI Generated Diagram")
     st.divider()
+
 
