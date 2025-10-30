@@ -56,7 +56,7 @@ Requirements:
                     {"role": "system", "content": "You are a precise flashcard creator. Return only valid JSON arrays. Extract information only from the provided text."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.4,
+                temperature=0.7,
                 max_tokens=2000
             )
             

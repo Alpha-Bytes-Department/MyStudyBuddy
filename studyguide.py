@@ -88,7 +88,7 @@ def generate_diagram(description):
     """Generate a diagram using DALL-E based on description"""
     try:
         response = client.images.generate(
-            model="dall-e-3",
+            model="gpt-4o",
             prompt=f"Create a clear, educational diagram showing: {description}. Style: clean, simple, educational illustration with labels and arrows where appropriate. Use a white or light background.",
             size="1024x1024",
             quality="standard",
