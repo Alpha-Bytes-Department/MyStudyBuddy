@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import json
 
 # Load API Key
 load_dotenv()
@@ -142,6 +143,36 @@ if transcript and generate_button:
 
         st.success("✅ Your comprehensive note is ready!")
         
+        # Generate JSON response
+        json_response = {
+            "status": "success",
+            "data": {
+                "note_content": notes,
+                "metadata": {
+                    "character_count": len(notes),
+                    "word_count": len(notes.split()),
+                    "line_count": len(notes.split('\n')),
+                    "input_length": len(transcript),
+                    "has_custom_instructions": bool(additional_instructions and additional_instructions.strip())
+                }
+            }
+        }
+        
+        # Display JSON response
+        st.markdown("---")
+        st.markdown("### 🔗 JSON Response for Backend")
+        st.json(json_response)
+        
+        # Copy JSON button
+        json_string = json.dumps(json_response, indent=2)
+        st.download_button(
+            label="📋 Download JSON Response",
+            data=json_string,
+            file_name="note_response.json",
+            mime="application/json",
+            use_container_width=True
+        )
+        
         # Display the generated note
         st.markdown("---")
         st.markdown("### 📚 Your Study Note")
@@ -183,21 +214,7 @@ if transcript and generate_button:
 elif not transcript and generate_button:
     st.error("⚠️ Please paste some text to generate a note!")
 
-# Help section
-with st.expander("ℹ️ How to Use"):
-    st.markdown("""
-    **Steps:**
-    1. **Paste your text** - Copy any study material (lecture notes, articles, textbook chapters, etc.)
-    2. **Add custom instructions** (optional) - Specify how you want the note formatted
-    3. **Click Generate** - The AI will create one comprehensive note covering everything
-    4. **Download** - Save your note as a text file
-    
-    **Tips:**
-    - Longer texts will generate more detailed notes
-    - Use custom instructions to focus on specific aspects
-    - The note will be organized with clear sections and subheadings
-    - Perfect for exam preparation and quick revision
-    """)
+
 
 # Footer
 st.markdown("---")
