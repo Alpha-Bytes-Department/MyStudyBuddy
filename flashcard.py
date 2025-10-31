@@ -13,6 +13,61 @@ class FlashcardGenerator:
     def __init__(self, client):
         self.client = client
     
+    def analyze_text_capacity(self, text: str) -> Dict:
+        """Analyze text and determine maximum flashcards that can be generated"""
+        
+        prompt = f"""Analyze the following text and determine how many quality flashcards can be generated from it.
+
+Text to analyze:
+{text}
+
+Consider these factors:
+1. Text length and word count
+2. Number of distinct concepts, topics, or key ideas present
+3. Depth of information provided
+4. Variety of information (definitions, facts, processes, examples)
+5. Redundancy or repetition in the content
+
+Provide only a single number representing the absolute maximum number of unique, quality flashcards that can be generated from this text.
+
+Rules:
+- Be realistic - don't overestimate capacity
+- A short paragraph can typically support 2-5 flashcards
+- A page of text can typically support 8-15 flashcards
+- Each flashcard needs substantial, distinct information
+
+Return only the number, nothing else.
+"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert educational content analyzer. Provide accurate assessments of text capacity for flashcard generation. Return only a single number."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=50
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # Extract just the number
+            max_flashcards = int(re.search(r'\d+', content).group())
+            
+            return {
+                "max_flashcards": max_flashcards
+            }
+            
+        except Exception as e:
+            st.error(f"Error analyzing text: {str(e)}")
+            # Fallback to simple word count based estimation
+            word_count = len(text.split())
+            estimated = max(1, min(20, word_count // 50))
+            return {
+                "max_flashcards": estimated
+            }
+    
     def generate_flashcards(self, text: str, flashcard_type: str, num_cards: int, additional_instructions: str = "") -> List[Dict]:
         """Generate flashcards from input text"""
         
@@ -162,6 +217,13 @@ def main():
             border-radius: 5px;
             margin: 10px 0;
         }
+        .analysis-box {
+            background-color: #e7f3ff;
+            border-left: 5px solid #2196F3;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
         </style>
     """, unsafe_allow_html=True)
     
@@ -177,6 +239,8 @@ def main():
         st.session_state.user_answers = {}
     if 'show_answer' not in st.session_state:
         st.session_state.show_answer = {}
+    if 'text_analysis' not in st.session_state:
+        st.session_state.text_analysis = None
     
     # Main content area
     tab1, tab2 = st.tabs(["📝 Generate Flashcards", "📚 Study Mode"])
@@ -192,6 +256,28 @@ def main():
                 height=200,
                 placeholder="Paste your text here... (lecture notes, textbook content, etc.)"
             )
+            
+            # Feature 1: Analyze Text Button
+            if st.button("🔍 Analyze Text Capacity", use_container_width=True):
+                if not input_text or len(input_text.strip()) < 20:
+                    st.warning("⚠️ Please enter at least 20 characters of text to analyze")
+                else:
+                    with st.spinner("🔄 Analyzing your text..."):
+                        generator = FlashcardGenerator(client)
+                        analysis = generator.analyze_text_capacity(input_text)
+                        st.session_state.text_analysis = analysis
+                        st.rerun()
+            
+            # Feature 2: Display Analysis Results
+            if st.session_state.text_analysis:
+                analysis = st.session_state.text_analysis
+                
+                st.markdown(f"""
+                <div class="analysis-box">
+                    <h4>📊 Text Analysis Results</h4>
+                    <p><strong>Maximum Flashcards Possible:</strong> {analysis['max_flashcards']}</p>
+                </div>
+                """, unsafe_allow_html=True)
         
         with col2:
             flashcard_type = st.selectbox(
@@ -199,12 +285,31 @@ def main():
                 ["Question and Answer", "Terms and Definition"]
             )
             
-            num_cards = st.number_input(
-                "Number of Flashcards:",
-                min_value=1,
-                max_value=20,
-                value=5
-            )
+            # Feature 3: Dynamic Number Input with Validation
+            if st.session_state.text_analysis:
+                max_allowed = st.session_state.text_analysis['max_flashcards']
+                
+                num_cards = st.number_input(
+                    "Number of Flashcards:",
+                    min_value=1,
+                    max_value=max_allowed,
+                    value=min(5, max_allowed),
+                    help=f"Based on your text, maximum {max_allowed} flashcards can be generated"
+                )
+                
+                # Show info if user reaches maximum
+                if num_cards == max_allowed:
+                    st.info(f"ℹ️ You've reached the maximum of {max_allowed} flashcards for this text.")
+                    
+            else:
+                num_cards = st.number_input(
+                    "Number of Flashcards:",
+                    min_value=1,
+                    max_value=20,
+                    value=5,
+                    help="Analyze your text first to see recommended numbers"
+                )
+                st.info("💡 Click 'Analyze Text Capacity' to see how many flashcards can be generated from your text")
             
             additional_instructions = st.text_area(
                 "Additional Instructions:",
@@ -215,29 +320,75 @@ def main():
         if st.button("🎯 Generate Flashcards", type="primary", use_container_width=True):
             if not input_text:
                 st.error("⚠️ Please enter some text to generate flashcards")
+            elif len(input_text.strip()) < 20:
+                st.error("⚠️ Text is too short. Please provide at least 20 characters.")
             else:
-                with st.spinner("🔄 Generating flashcards..."):
-                    generator = FlashcardGenerator(client)
-                    flashcards = generator.generate_flashcards(
-                        input_text,
-                        flashcard_type,
-                        num_cards,
-                        additional_instructions
-                    )
-                    
-                    if flashcards:
-                        st.session_state.flashcards = flashcards
-                        st.session_state.flashcard_type = flashcard_type
-                        st.session_state.current_card = 0
-                        st.session_state.user_answers = {}
-                        st.session_state.show_answer = {}
-                        st.success(f"✅ Generated {len(flashcards)} flashcards!")
-                        st.info("👉 Go to 'Study Mode' tab to practice")
+                # ALWAYS analyze first if not already done
+                if not st.session_state.text_analysis:
+                    with st.spinner("🔄 Analyzing text capacity..."):
+                        generator = FlashcardGenerator(client)
+                        analysis = generator.analyze_text_capacity(input_text)
+                        st.session_state.text_analysis = analysis
+                
+                # Now validate against analysis
+                max_allowed = st.session_state.text_analysis['max_flashcards']
+                if num_cards > max_allowed:
+                    st.error(f"❌ Cannot generate {num_cards} flashcards. Maximum possible for this text is {max_allowed}. Please reduce the number or add more content.")
+                else:
+                    with st.spinner("🔄 Generating flashcards..."):
+                        generator = FlashcardGenerator(client)
+                        flashcards = generator.generate_flashcards(
+                            input_text,
+                            flashcard_type,
+                            num_cards,
+                            additional_instructions
+                        )
+                        
+                        if flashcards:
+                            st.session_state.flashcards = flashcards
+                            st.session_state.flashcard_type = flashcard_type
+                            st.session_state.current_card = 0
+                            st.session_state.user_answers = {}
+                            st.session_state.show_answer = {}
+                            st.success(f"✅ Generated {len(flashcards)} flashcards!")
+                            st.info("👉 Go to 'Study Mode' tab to practice")
         
         # Preview generated flashcards
         if st.session_state.flashcards:
             st.markdown("---")
             st.subheader("📋 Generated Flashcards Preview")
+            
+            # Generate JSON response for backend
+            json_response = {
+                "status": "success",
+                "data": {
+                    "flashcards": st.session_state.flashcards,
+                    "flashcard_type": st.session_state.flashcard_type,
+                    "total_count": len(st.session_state.flashcards),
+                    "text_analysis": st.session_state.text_analysis if st.session_state.text_analysis else None,
+                    "metadata": {
+                        "generated_at": None,  # Can add timestamp if needed
+                        "input_text_length": len(input_text) if input_text else 0,
+                        "custom_instructions": additional_instructions if additional_instructions else None
+                    }
+                }
+            }
+            
+            # Display JSON response
+            st.markdown("### 🔗 JSON Response for Backend")
+            st.json(json_response)
+            
+            # Download JSON button
+            json_string = json.dumps(json_response, indent=2, ensure_ascii=False)
+            st.download_button(
+                label="📋 Download JSON Response",
+                data=json_string,
+                file_name="flashcards_response.json",
+                mime="application/json",
+                use_container_width=True
+            )
+            
+            st.markdown("---")
             
             for idx, card in enumerate(st.session_state.flashcards):
                 with st.expander(f"Flashcard"):
